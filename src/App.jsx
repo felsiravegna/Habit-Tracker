@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useRef } from "react";
-import { Check, X, Flame } from "lucide-react";
+import { Check, X, Flame, Plus } from "lucide-react";
 
 const DONE_COLOR = "#8FDDA0";
 const PEAK_COLOR = "#7DB8EE";
 const NUMBER_PALETTE = ["#F5BE73", "#F3A6B8", "#8FE0C0", "#C6AEEA", "#F5D373"];
+const RANGE_COLORS = [NUMBER_PALETTE[0], PEAK_COLOR, DONE_COLOR, NUMBER_PALETTE[1], NUMBER_PALETTE[2], NUMBER_PALETTE[3], NUMBER_PALETTE[4]];
 const HABIT_COL_W = 176;
 const STREAK_COL_W = 68;
 const DAY_COL_W = 72;
@@ -37,17 +38,20 @@ const initialCategories = [
 const initialHabits = [
   { id: "h_cama", categoryId: "cat_general", name: "Cama", type: "boolean", trackStreak: true },
   { id: "h_diario", categoryId: "cat_general", name: "Diario", type: "boolean", trackStreak: true },
-  { id: "h_leer", categoryId: "cat_general", name: "Leer", type: "number", unit: "páginas", color: NUMBER_PALETTE[1], trackStreak: false, highlightBest: false },
+  { id: "h_leer", categoryId: "cat_general", name: "Leer", type: "number", unit: "páginas", color: NUMBER_PALETTE[1], trackStreak: false },
   { id: "h_dientes_md", categoryId: "cat_higiene", name: "Dientes mediodía", type: "boolean", trackStreak: true },
   { id: "h_dientes_nc", categoryId: "cat_higiene", name: "Dientes noche", type: "boolean", trackStreak: false },
   { id: "h_ducha", categoryId: "cat_higiene", name: "Ducha", type: "boolean", trackStreak: false },
   { id: "h_cara", categoryId: "cat_higiene", name: "Cara", type: "boolean", trackStreak: false },
   { id: "h_mg_am", categoryId: "cat_salud", name: "Magnesio mañana", type: "boolean", trackStreak: true },
   { id: "h_mg_pm", categoryId: "cat_salud", name: "Magnesio noche", type: "boolean", trackStreak: false },
-  { id: "h_pasos", categoryId: "cat_salud", name: "Pasos", type: "number", unit: "pasos", color: NUMBER_PALETTE[0], trackStreak: false, highlightBest: true },
+  { id: "h_pasos", categoryId: "cat_salud", name: "Pasos", type: "number", unit: "pasos", trackStreak: false, ranges: [
+    { id: "r_pasos_1", min: 6000, color: NUMBER_PALETTE[0], completes: true },
+    { id: "r_pasos_2", min: 10000, color: PEAK_COLOR, completes: true },
+  ] },
   { id: "h_pesarse", categoryId: "cat_salud", name: "Pesarse", type: "boolean", trackStreak: true },
-  { id: "h_cafe", categoryId: "cat_nutricion", name: "Café", type: "number", unit: "tazas", color: NUMBER_PALETTE[2], trackStreak: true, highlightBest: false },
-  { id: "h_agua", categoryId: "cat_nutricion", name: "Agua", type: "number", unit: "botellas", color: NUMBER_PALETTE[3], trackStreak: false, highlightBest: false },
+  { id: "h_cafe", categoryId: "cat_nutricion", name: "Café", type: "number", unit: "tazas", color: NUMBER_PALETTE[2], trackStreak: true },
+  { id: "h_agua", categoryId: "cat_nutricion", name: "Agua", type: "number", unit: "botellas", color: NUMBER_PALETTE[3], trackStreak: false },
   { id: "h_choco", categoryId: "cat_nutricion", name: "Sin chocolatada", type: "boolean", trackStreak: false },
 ];
 
@@ -76,7 +80,61 @@ export default function HabitTracker() {
   const [habits, setHabits] = useState(initialHabits);
   const [entries, setEntries] = useState(() => buildSeedEntries(today));
   const [visibleDays, setVisibleDays] = useState(45);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [draft, setDraft] = useState(null);
   const scrollRef = useRef(null);
+
+  function openAddModal() {
+    setDraft({
+      categoryId: categories[0] ? categories[0].id : "",
+      name: "",
+      description: "",
+      startDate: todayISO,
+      type: "boolean",
+      unit: "",
+      ranges: [],
+    });
+    setShowAddModal(true);
+  }
+
+  function addRange() {
+    setDraft((d) => ({
+      ...d,
+      ranges: [...d.ranges, { id: nextId("r"), min: "", color: RANGE_COLORS[d.ranges.length % RANGE_COLORS.length], completes: true }],
+    }));
+  }
+
+  function updateRange(rangeId, patch) {
+    setDraft((d) => ({ ...d, ranges: d.ranges.map((r) => (r.id === rangeId ? { ...r, ...patch } : r)) }));
+  }
+
+  function removeRange(rangeId) {
+    setDraft((d) => ({ ...d, ranges: d.ranges.filter((r) => r.id !== rangeId) }));
+  }
+
+  function saveNewHabit() {
+    if (!draft.name.trim() || !draft.categoryId) return;
+    const cleanRanges =
+      draft.type === "number"
+        ? draft.ranges
+            .filter((r) => r.min !== "" && !Number.isNaN(Number(r.min)))
+            .map((r) => ({ id: r.id, min: Number(r.min), color: r.color, completes: r.completes }))
+            .sort((a, b) => a.min - b.min)
+        : undefined;
+    const newHabit = {
+      id: nextId("h"),
+      categoryId: draft.categoryId,
+      name: draft.name.trim(),
+      description: draft.description.trim(),
+      startDate: draft.startDate || todayISO,
+      type: draft.type,
+      unit: draft.type === "number" ? draft.unit.trim() : undefined,
+      ranges: cleanRanges,
+      trackStreak: true,
+    };
+    setHabits((prev) => [...prev, newHabit]);
+    setShowAddModal(false);
+  }
 
   function handleScroll(e) {
     const el = e.currentTarget;
@@ -96,10 +154,24 @@ export default function HabitTracker() {
     [categories, habits]
   );
 
+  function activeRange(habit, value) {
+    if (!habit.ranges || habit.ranges.length === 0) return null;
+    let best = null;
+    for (const r of habit.ranges) {
+      if (value >= r.min && (!best || r.min > best.min)) best = r;
+    }
+    return best;
+  }
+
   function isDone(dateISO, habit) {
     const v = entries[dateISO] && entries[dateISO][habit.id];
     if (habit.type === "boolean") return v === true;
-    return typeof v === "number" && v > 0;
+    if (typeof v !== "number") return false;
+    if (habit.ranges && habit.ranges.length > 0) {
+      const r = activeRange(habit, v);
+      return !!(r && r.completes);
+    }
+    return v > 0;
   }
 
   function toggleBoolean(dateISO, habitId) {
@@ -134,19 +206,10 @@ export default function HabitTracker() {
     return count;
   }
 
-  function peakValue(habit) {
-    if (habit.type !== "number" || !habit.highlightBest) return null;
-    let max = 0;
-    dates.forEach((d) => {
-      const v = entries[isoDate(d)] && entries[isoDate(d)][habit.id];
-      if (typeof v === "number" && v > max) max = v;
-    });
-    return max > 0 ? max : null;
-  }
-
   const todayStats = useMemo(() => {
-    const total = orderedHabits.length;
-    const done = orderedHabits.filter((h) => isDone(todayISO, h)).length;
+    const applicable = orderedHabits.filter((h) => !h.startDate || h.startDate <= todayISO);
+    const total = applicable.length;
+    const done = applicable.filter((h) => isDone(todayISO, h)).length;
     return { total, done };
   }, [orderedHabits, entries, todayISO]);
 
@@ -200,27 +263,33 @@ export default function HabitTracker() {
             </p>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 12, background: "#FFFFFF", border: "1px solid #EEEDE7", borderRadius: 16, padding: "10px 16px" }}>
-            <svg width="56" height="56" viewBox="0 0 56 56">
-              <circle cx="28" cy="28" r="26" fill="none" stroke="#F0EFE9" strokeWidth="5" />
-              <circle
-                cx="28"
-                cy="28"
-                r="26"
-                fill="none"
-                stroke={ratio === 1 ? DONE_COLOR : "#232320"}
-                strokeWidth="5"
-                strokeLinecap="round"
-                strokeDasharray={circumference}
-                strokeDashoffset={dashOffset}
-                transform="rotate(-90 28 28)"
-                style={{ transition: "stroke-dashoffset 300ms ease" }}
-              />
-            </svg>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#232320" }}>Hoy</div>
-              <div className="htk-mono" style={{ fontSize: 12, color: "#9A968C" }}>
-                {todayStats.done}/{todayStats.total} completados
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <button onClick={openAddModal} style={primaryBtnStyle}>
+              <Plus size={14} /> Agregar hábito
+            </button>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 12, background: "#FFFFFF", border: "1px solid #EEEDE7", borderRadius: 16, padding: "10px 16px" }}>
+              <svg width="56" height="56" viewBox="0 0 56 56">
+                <circle cx="28" cy="28" r="26" fill="none" stroke="#F0EFE9" strokeWidth="5" />
+                <circle
+                  cx="28"
+                  cy="28"
+                  r="26"
+                  fill="none"
+                  stroke={ratio === 1 ? DONE_COLOR : "#232320"}
+                  strokeWidth="5"
+                  strokeLinecap="round"
+                  strokeDasharray={circumference}
+                  strokeDashoffset={dashOffset}
+                  transform="rotate(-90 28 28)"
+                  style={{ transition: "stroke-dashoffset 300ms ease" }}
+                />
+              </svg>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#232320" }}>Hoy</div>
+                <div className="htk-mono" style={{ fontSize: 12, color: "#9A968C" }}>
+                  {todayStats.done}/{todayStats.total} completados
+                </div>
               </div>
             </div>
           </div>
@@ -328,7 +397,6 @@ export default function HabitTracker() {
 
                     {catHabits.map((h) => {
                       const streak = streakFor(h);
-                      const peak = peakValue(h);
                       return (
                         <React.Fragment key={h.id}>
                           <div
@@ -347,7 +415,7 @@ export default function HabitTracker() {
                             }}
                           >
                             <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2 }}>
-                              <span style={{ fontSize: 13, fontWeight: 500, color: "#4A473F" }}>{h.name}</span>
+                              <span title={h.description || undefined} style={{ fontSize: 13, fontWeight: 500, color: "#4A473F" }}>{h.name}</span>
                               {h.unit && (
                                 <span className="htk-mono" style={{ fontSize: 10, color: "#B7B3A8" }}>
                                   {h.unit}
@@ -389,6 +457,19 @@ export default function HabitTracker() {
                             const bg = isToday ? "#FBFAF6" : "#fff";
                             const val = entries[dISO] && entries[dISO][h.id];
 
+                            if (h.startDate && dISO < h.startDate) {
+                              return (
+                                <div
+                                  key={dISO}
+                                  title="Todavía no empezaste este hábito"
+                                  style={{
+                                    background: "repeating-linear-gradient(45deg, #FAFAF8, #FAFAF8 5px, #F1F0EC 5px, #F1F0EC 10px)",
+                                    minHeight: 44,
+                                  }}
+                                />
+                              );
+                            }
+
                             if (h.type === "boolean") {
                               const done = val === true;
                               return (
@@ -416,7 +497,15 @@ export default function HabitTracker() {
                               );
                             }
 
-                            const cellColor = typeof val === "number" && val > 0 ? (peak !== null && val === peak ? PEAK_COLOR : h.color) : bg;
+                            let cellColor = bg;
+                            if (typeof val === "number" && val > 0) {
+                              if (h.ranges && h.ranges.length > 0) {
+                                const r = activeRange(h, val);
+                                cellColor = r ? r.color : bg;
+                              } else {
+                                cellColor = h.color;
+                              }
+                            }
                             return (
                               <div key={dISO} style={{ background: cellColor, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 44 }}>
                                 <input
@@ -451,6 +540,202 @@ export default function HabitTracker() {
         </div>
 
       </div>
+
+      {showAddModal && draft && (
+        <div
+          onClick={() => setShowAddModal(false)}
+          style={{ position: "fixed", inset: 0, background: "rgba(20,20,15,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: "#fff", borderRadius: 20, padding: 24, width: "100%", maxWidth: 460, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(20,20,15,0.25)" }}
+          >
+            <h2 style={{ fontSize: 17, fontWeight: 700, color: "#232320", margin: "0 0 18px" }}>Nuevo hábito</h2>
+
+            <label style={labelStyle}>Categoría</label>
+            <select
+              value={draft.categoryId}
+              onChange={(e) => setDraft((d) => ({ ...d, categoryId: e.target.value }))}
+              style={{ ...inputStyle, width: "100%", marginBottom: 14, boxSizing: "border-box" }}
+            >
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+
+            <label style={labelStyle}>Nombre</label>
+            <input
+              value={draft.name}
+              onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+              placeholder="Ej: Meditar"
+              style={{ ...inputStyle, width: "100%", marginBottom: 14, boxSizing: "border-box" }}
+            />
+
+            <label style={labelStyle}>Descripción</label>
+            <textarea
+              value={draft.description}
+              onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+              placeholder="Opcional"
+              rows={2}
+              style={{ ...inputStyle, width: "100%", marginBottom: 14, boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }}
+            />
+
+            <label style={labelStyle}>Fecha de inicio</label>
+            <input
+              type="date"
+              value={draft.startDate}
+              onChange={(e) => setDraft((d) => ({ ...d, startDate: e.target.value }))}
+              style={{ ...inputStyle, width: "100%", marginBottom: 14, boxSizing: "border-box" }}
+            />
+
+            <label style={labelStyle}>Tipo de hábito</label>
+            <select
+              value={draft.type}
+              onChange={(e) => setDraft((d) => ({ ...d, type: e.target.value, ranges: e.target.value === "number" ? d.ranges : [] }))}
+              style={{ ...inputStyle, width: "100%", marginBottom: draft.type === "number" ? 14 : 20, boxSizing: "border-box" }}
+            >
+              <option value="boolean">Sí / No</option>
+              <option value="number">Numérico</option>
+            </select>
+
+            {draft.type === "number" && (
+              <>
+                <label style={labelStyle}>Unidad</label>
+                <input
+                  value={draft.unit}
+                  onChange={(e) => setDraft((d) => ({ ...d, unit: e.target.value }))}
+                  placeholder="Ej: pasos, tazas, páginas"
+                  style={{ ...inputStyle, width: "100%", marginBottom: 16, boxSizing: "border-box" }}
+                />
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span style={{ ...labelStyle, marginBottom: 0 }}>Rangos</span>
+                  <button onClick={addRange} style={smallBtnStyle}>
+                    <Plus size={12} /> Agregar rango
+                  </button>
+                </div>
+                <p style={{ fontSize: 11, color: "#B7B3A8", margin: "0 0 10px", lineHeight: 1.4 }}>
+                  Definí a partir de qué cantidad cambia de color, y marcá cuáles cuentan como "cumplido". Si el valor no llega a ningún rango, se muestra sin marcar y no cuenta como cumplido.
+                </p>
+
+                {draft.ranges.length === 0 && (
+                  <p style={{ fontSize: 12, color: "#C9C5B9", marginBottom: 16 }}>Todavía no agregaste ningún rango.</p>
+                )}
+
+                {draft.ranges.map((r) => (
+                  <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, background: "#FAFAF8", border: "1px solid #EEEDE7", borderRadius: 10, padding: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 11, color: "#9A968C", whiteSpace: "nowrap" }}>A partir de</span>
+                    <input
+                      type="number"
+                      value={r.min}
+                      onChange={(e) => updateRange(r.id, { min: e.target.value })}
+                      style={{ ...inputStyle, width: 68, padding: "6px 8px" }}
+                    />
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {RANGE_COLORS.map((c) => (
+                        <button
+                          key={c}
+                          onClick={() => updateRange(r.id, { color: c })}
+                          title={c}
+                          style={{
+                            width: 18,
+                            height: 18,
+                            borderRadius: "50%",
+                            background: c,
+                            border: r.color === c ? "2px solid #232320" : "2px solid transparent",
+                            cursor: "pointer",
+                            padding: 0,
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#4A473F", whiteSpace: "nowrap" }}>
+                      <input type="checkbox" checked={r.completes} onChange={(e) => updateRange(r.id, { completes: e.target.checked })} />
+                      Cumple
+                    </label>
+                    <button
+                      onClick={() => removeRange(r.id)}
+                      style={{ border: "none", background: "none", cursor: "pointer", color: "#C9C5B9", marginLeft: "auto" }}
+                      title="Quitar rango"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
+              <button onClick={() => setShowAddModal(false)} style={secondaryBtnStyle}>Cancelar</button>
+              <button
+                onClick={saveNewHabit}
+                disabled={!draft.name.trim()}
+                style={{ ...primaryBtnStyle, opacity: draft.name.trim() ? 1 : 0.5, cursor: draft.name.trim() ? "pointer" : "not-allowed" }}
+              >
+                Crear hábito
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+const inputStyle = {
+  fontFamily: "inherit",
+  fontSize: 13,
+  padding: "8px 10px",
+  border: "1px solid #E3E1DA",
+  borderRadius: 9,
+  outline: "none",
+  color: "#232320",
+};
+const labelStyle = {
+  display: "block",
+  fontSize: 11,
+  fontWeight: 600,
+  color: "#9A968C",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  marginBottom: 6,
+};
+const primaryBtnStyle = {
+  fontFamily: "inherit",
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  fontSize: 13,
+  fontWeight: 600,
+  color: "#fff",
+  background: "#232320",
+  border: "none",
+  borderRadius: 9,
+  padding: "8px 14px",
+  cursor: "pointer",
+};
+const secondaryBtnStyle = {
+  fontFamily: "inherit",
+  fontSize: 13,
+  fontWeight: 600,
+  color: "#6B675E",
+  background: "#F2F1ED",
+  border: "none",
+  borderRadius: 9,
+  padding: "8px 14px",
+  cursor: "pointer",
+};
+const smallBtnStyle = {
+  fontFamily: "inherit",
+  display: "flex",
+  alignItems: "center",
+  gap: 4,
+  fontSize: 11,
+  fontWeight: 600,
+  color: "#232320",
+  background: "none",
+  border: "1px solid #E3E1DA",
+  borderRadius: 8,
+  padding: "4px 8px",
+  cursor: "pointer",
+};

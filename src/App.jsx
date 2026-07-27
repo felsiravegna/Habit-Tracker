@@ -1,15 +1,14 @@
 import React, { useState, useMemo, useRef } from "react";
-import { Check, X, Flame, Plus } from "lucide-react";
+import { Check, X, Flame, Plus, Pencil } from "lucide-react";
 
-const DONE_COLOR = "#8FDDA0";
-const PEAK_COLOR = "#7DB8EE";
-const NUMBER_PALETTE = ["#F5BE73", "#F3A6B8", "#8FE0C0", "#C6AEEA", "#F5D373"];
-const RANGE_COLORS = [NUMBER_PALETTE[0], PEAK_COLOR, DONE_COLOR, NUMBER_PALETTE[1], NUMBER_PALETTE[2], NUMBER_PALETTE[3], NUMBER_PALETTE[4]];
+const DONE_COLOR = "#4CAE6E";
+const MISSED_COLOR = "#DD6A5C";
 const HABIT_COL_W = 176;
 const STREAK_COL_W = 68;
 const DAY_COL_W = 72;
 const HEADER_H = 56;
 const CAT_DIVIDER_H = 30;
+const RULES_ALWAYS = "2000-01-01";
 
 function isoDate(d) {
   const y = d.getFullYear();
@@ -28,31 +27,29 @@ const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "
 let idCounter = 1000;
 const nextId = (prefix) => `${prefix}_${idCounter++}`;
 
-const initialCategories = [
-  { id: "cat_general", name: "General" },
-  { id: "cat_higiene", name: "Higiene" },
-  { id: "cat_salud", name: "Salud" },
-  { id: "cat_nutricion", name: "Nutrición" },
-];
+const initialCategories = [{ id: "cat_general", name: "General" }];
 
 const initialHabits = [
-  { id: "h_cama", categoryId: "cat_general", name: "Cama", type: "boolean", trackStreak: true },
-  { id: "h_diario", categoryId: "cat_general", name: "Diario", type: "boolean", trackStreak: true },
-  { id: "h_leer", categoryId: "cat_general", name: "Leer", type: "number", unit: "páginas", color: NUMBER_PALETTE[1], trackStreak: false },
-  { id: "h_dientes_md", categoryId: "cat_higiene", name: "Dientes mediodía", type: "boolean", trackStreak: true },
-  { id: "h_dientes_nc", categoryId: "cat_higiene", name: "Dientes noche", type: "boolean", trackStreak: false },
-  { id: "h_ducha", categoryId: "cat_higiene", name: "Ducha", type: "boolean", trackStreak: false },
-  { id: "h_cara", categoryId: "cat_higiene", name: "Cara", type: "boolean", trackStreak: false },
-  { id: "h_mg_am", categoryId: "cat_salud", name: "Magnesio mañana", type: "boolean", trackStreak: true },
-  { id: "h_mg_pm", categoryId: "cat_salud", name: "Magnesio noche", type: "boolean", trackStreak: false },
-  { id: "h_pasos", categoryId: "cat_salud", name: "Pasos", type: "number", unit: "pasos", trackStreak: false, ranges: [
-    { id: "r_pasos_1", min: 6000, color: NUMBER_PALETTE[0], completes: true },
-    { id: "r_pasos_2", min: 10000, color: PEAK_COLOR, completes: true },
-  ] },
-  { id: "h_pesarse", categoryId: "cat_salud", name: "Pesarse", type: "boolean", trackStreak: true },
-  { id: "h_cafe", categoryId: "cat_nutricion", name: "Café", type: "number", unit: "tazas", color: NUMBER_PALETTE[2], trackStreak: true },
-  { id: "h_agua", categoryId: "cat_nutricion", name: "Agua", type: "number", unit: "botellas", color: NUMBER_PALETTE[3], trackStreak: false },
-  { id: "h_choco", categoryId: "cat_nutricion", name: "Sin chocolatada", type: "boolean", trackStreak: false },
+  { id: "h_cama", categoryId: "cat_general", name: "Cama", trackStreak: true, rules: [{ from: RULES_ALWAYS, type: "boolean" }] },
+  { id: "h_diario", categoryId: "cat_general", name: "Diario", trackStreak: true, rules: [{ from: RULES_ALWAYS, type: "boolean" }] },
+  { id: "h_leer", categoryId: "cat_general", name: "Leer", trackStreak: false, rules: [{ from: RULES_ALWAYS, type: "number", unit: "páginas" }] },
+  { id: "h_dientes_md", categoryId: "cat_general", name: "Dientes mediodía", trackStreak: true, rules: [{ from: RULES_ALWAYS, type: "boolean" }] },
+  { id: "h_dientes_nc", categoryId: "cat_general", name: "Dientes noche", trackStreak: false, rules: [{ from: RULES_ALWAYS, type: "boolean" }] },
+  { id: "h_ducha", categoryId: "cat_general", name: "Ducha", trackStreak: false, rules: [{ from: RULES_ALWAYS, type: "boolean" }] },
+  { id: "h_cara", categoryId: "cat_general", name: "Cara", trackStreak: false, rules: [{ from: RULES_ALWAYS, type: "boolean" }] },
+  { id: "h_mg_am", categoryId: "cat_general", name: "Magnesio mañana", trackStreak: true, rules: [{ from: RULES_ALWAYS, type: "boolean" }] },
+  { id: "h_mg_pm", categoryId: "cat_general", name: "Magnesio noche", trackStreak: false, rules: [{ from: RULES_ALWAYS, type: "boolean" }] },
+  { id: "h_pasos", categoryId: "cat_general", name: "Pasos", trackStreak: false, rules: [{
+    from: RULES_ALWAYS, type: "number", unit: "pasos", ranges: [
+      { id: "r_pasos_0", min: 0, max: 5999, completes: false },
+      { id: "r_pasos_1", min: 6000, max: 9999, completes: true },
+      { id: "r_pasos_2", min: 10000, max: null, completes: true },
+    ],
+  }] },
+  { id: "h_pesarse", categoryId: "cat_general", name: "Pesarse", trackStreak: true, rules: [{ from: RULES_ALWAYS, type: "boolean" }] },
+  { id: "h_cafe", categoryId: "cat_general", name: "Café", trackStreak: true, rules: [{ from: RULES_ALWAYS, type: "number", unit: "tazas" }] },
+  { id: "h_agua", categoryId: "cat_general", name: "Agua", trackStreak: false, rules: [{ from: RULES_ALWAYS, type: "number", unit: "botellas" }] },
+  { id: "h_choco", categoryId: "cat_general", name: "Sin chocolatada", trackStreak: false, rules: [{ from: RULES_ALWAYS, type: "boolean" }] },
 ];
 
 function buildSeedEntries(today) {
@@ -77,16 +74,28 @@ export default function HabitTracker() {
   const todayISO = isoDate(today);
 
   const [categories, setCategories] = useState(initialCategories);
-  const [habits, setHabits] = useState(initialHabits);
+  const [habits, setHabits] = useState(() => {
+    const defaultStart = isoDate(addDays(today, -4));
+    return initialHabits.map((h) => ({ ...h, startDate: h.startDate || defaultStart }));
+  });
   const [entries, setEntries] = useState(() => buildSeedEntries(today));
   const [visibleDays, setVisibleDays] = useState(45);
   const [showAddModal, setShowAddModal] = useState(false);
   const [draft, setDraft] = useState(null);
+  const [editingHabitId, setEditingHabitId] = useState(null);
+  const [pendingEdit, setPendingEdit] = useState(null);
   const scrollRef = useRef(null);
 
+  function closeModal() {
+    setShowAddModal(false);
+    setDraft(null);
+    setEditingHabitId(null);
+  }
+
   function openAddModal() {
+    setEditingHabitId(null);
     setDraft({
-      categoryId: categories[0] ? categories[0].id : "",
+      categoryName: categories[0] ? categories[0].name : "General",
       name: "",
       description: "",
       startDate: todayISO,
@@ -97,10 +106,41 @@ export default function HabitTracker() {
     setShowAddModal(true);
   }
 
+  function openEditModal(habit) {
+    const current = rulesAt(habit, todayISO);
+    const cat = categories.find((c) => c.id === habit.categoryId);
+    setEditingHabitId(habit.id);
+    setDraft({
+      categoryName: cat ? cat.name : "",
+      name: habit.name,
+      description: habit.description || "",
+      startDate: habit.startDate || todayISO,
+      type: current.type,
+      unit: current.unit || "",
+      ranges: (current.ranges || []).map((r) => ({
+        id: r.id,
+        min: r.min === null || r.min === undefined ? "" : String(r.min),
+        max: r.max === null || r.max === undefined ? "" : String(r.max),
+        completes: r.completes,
+      })),
+    });
+    setShowAddModal(true);
+  }
+
+  function resolveCategoryId(name) {
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    const existing = categories.find((c) => c.name.toLowerCase() === trimmed.toLowerCase());
+    if (existing) return existing.id;
+    const newCat = { id: nextId("cat"), name: trimmed };
+    setCategories((prev) => [...prev, newCat]);
+    return newCat.id;
+  }
+
   function addRange() {
     setDraft((d) => ({
       ...d,
-      ranges: [...d.ranges, { id: nextId("r"), min: "", color: RANGE_COLORS[d.ranges.length % RANGE_COLORS.length], completes: true }],
+      ranges: [...d.ranges, { id: nextId("r"), min: "", max: "", completes: true }],
     }));
   }
 
@@ -112,28 +152,67 @@ export default function HabitTracker() {
     setDraft((d) => ({ ...d, ranges: d.ranges.filter((r) => r.id !== rangeId) }));
   }
 
-  function saveNewHabit() {
-    if (!draft.name.trim() || !draft.categoryId) return;
+  function applyHabitEdit(habitId, topFields, rulesChange) {
+    setHabits((prev) =>
+      prev.map((h) => {
+        if (h.id !== habitId) return h;
+        let rules = h.rules;
+        if (rulesChange) {
+          if (rulesChange.mode === "all") {
+            rules = [{ from: RULES_ALWAYS, ...rulesChange.snapshot }];
+          } else {
+            rules = [...h.rules.filter((r) => r.from !== todayISO), { from: todayISO, ...rulesChange.snapshot }].sort((a, b) =>
+              a.from.localeCompare(b.from)
+            );
+          }
+        }
+        return { ...h, ...topFields, rules };
+      })
+    );
+  }
+
+  function handleConfirmSave() {
+    if (!draft.name.trim() || !draft.categoryName.trim()) return;
+    const categoryId = resolveCategoryId(draft.categoryName);
     const cleanRanges =
       draft.type === "number"
         ? draft.ranges
             .filter((r) => r.min !== "" && !Number.isNaN(Number(r.min)))
-            .map((r) => ({ id: r.id, min: Number(r.min), color: r.color, completes: r.completes }))
+            .map((r) => ({
+              id: r.id,
+              min: Number(r.min),
+              max: r.max === "" || r.max === null || r.max === undefined ? null : Number(r.max),
+              completes: r.completes,
+            }))
             .sort((a, b) => a.min - b.min)
         : undefined;
-    const newHabit = {
-      id: nextId("h"),
-      categoryId: draft.categoryId,
+    const rulesSnapshot = { type: draft.type, unit: draft.type === "number" ? draft.unit.trim() : undefined, ranges: cleanRanges };
+    const topFields = {
+      categoryId,
       name: draft.name.trim(),
       description: draft.description.trim(),
       startDate: draft.startDate || todayISO,
-      type: draft.type,
-      unit: draft.type === "number" ? draft.unit.trim() : undefined,
-      ranges: cleanRanges,
-      trackStreak: true,
     };
-    setHabits((prev) => [...prev, newHabit]);
-    setShowAddModal(false);
+
+    if (!editingHabitId) {
+      const newHabit = { id: nextId("h"), ...topFields, trackStreak: true, rules: [{ from: topFields.startDate, ...rulesSnapshot }] };
+      setHabits((prev) => [...prev, newHabit]);
+      closeModal();
+      return;
+    }
+
+    const habit = habits.find((h) => h.id === editingHabitId);
+    const current = rulesAt(habit, todayISO);
+    const before = JSON.stringify({ type: current.type, unit: current.unit || "", ranges: current.ranges || [] });
+    const after = JSON.stringify({ type: rulesSnapshot.type, unit: rulesSnapshot.unit || "", ranges: rulesSnapshot.ranges || [] });
+
+    if (before === after) {
+      applyHabitEdit(editingHabitId, topFields, null);
+      closeModal();
+      return;
+    }
+
+    setPendingEdit({ habitId: editingHabitId, topFields, rulesSnapshot });
   }
 
   function handleScroll(e) {
@@ -154,21 +233,33 @@ export default function HabitTracker() {
     [categories, habits]
   );
 
-  function activeRange(habit, value) {
-    if (!habit.ranges || habit.ranges.length === 0) return null;
-    let best = null;
-    for (const r of habit.ranges) {
-      if (value >= r.min && (!best || r.min > best.min)) best = r;
+  function rulesAt(habit, dateISO) {
+    const list = habit.rules;
+    let chosen = list[0];
+    for (const r of list) {
+      if (r.from <= dateISO) chosen = r;
+      else break;
     }
-    return best;
+    return chosen;
+  }
+
+  function activeRange(rules, value) {
+    if (!rules.ranges || rules.ranges.length === 0) return null;
+    const sorted = [...rules.ranges].sort((a, b) => a.min - b.min);
+    for (const r of sorted) {
+      const hasMax = r.max !== null && r.max !== undefined && r.max !== "";
+      if (value >= r.min && (!hasMax || value <= r.max)) return r;
+    }
+    return null;
   }
 
   function isDone(dateISO, habit) {
     const v = entries[dateISO] && entries[dateISO][habit.id];
-    if (habit.type === "boolean") return v === true;
+    const rules = rulesAt(habit, dateISO);
+    if (rules.type === "boolean") return v === true;
     if (typeof v !== "number") return false;
-    if (habit.ranges && habit.ranges.length > 0) {
-      const r = activeRange(habit, v);
+    if (rules.ranges && rules.ranges.length > 0) {
+      const r = activeRange(rules, v);
       return !!(r && r.completes);
     }
     return v > 0;
@@ -397,10 +488,15 @@ export default function HabitTracker() {
 
                     {catHabits.map((h) => {
                       const streak = streakFor(h);
+                      const currentRules = rulesAt(h, todayISO);
                       return (
                         <React.Fragment key={h.id}>
                           <div
                             className="htk-hdr"
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              openEditModal(h);
+                            }}
                             style={{
                               position: "sticky",
                               left: 0,
@@ -412,24 +508,35 @@ export default function HabitTracker() {
                               gap: 6,
                               padding: "0 12px",
                               minHeight: 44,
+                              cursor: "context-menu",
                             }}
                           >
                             <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2 }}>
                               <span title={h.description || undefined} style={{ fontSize: 13, fontWeight: 500, color: "#4A473F" }}>{h.name}</span>
-                              {h.unit && (
+                              {currentRules.unit && (
                                 <span className="htk-mono" style={{ fontSize: 10, color: "#B7B3A8" }}>
-                                  {h.unit}
+                                  {currentRules.unit}
                                 </span>
                               )}
                             </div>
-                            <button
-                              onClick={() => removeHabit(h.id)}
-                              className="htk-x"
-                              style={{ border: "none", background: "none", cursor: "pointer", color: "#C9C5B9", flexShrink: 0 }}
-                              title="Eliminar hábito"
-                            >
-                              <X size={11} />
-                            </button>
+                            <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+                              <button
+                                onClick={() => openEditModal(h)}
+                                className="htk-x"
+                                style={{ border: "none", background: "none", cursor: "pointer", color: "#B7B3A8" }}
+                                title="Editar hábito"
+                              >
+                                <Pencil size={11} />
+                              </button>
+                              <button
+                                onClick={() => removeHabit(h.id)}
+                                className="htk-x"
+                                style={{ border: "none", background: "none", cursor: "pointer", color: "#C9C5B9" }}
+                                title="Eliminar hábito"
+                              >
+                                <X size={11} />
+                              </button>
+                            </div>
                           </div>
 
                           <div
@@ -454,6 +561,7 @@ export default function HabitTracker() {
                           {dates.map((date) => {
                             const dISO = isoDate(date);
                             const isToday = dISO === todayISO;
+                            const isPast = dISO < todayISO;
                             const bg = isToday ? "#FBFAF6" : "#fff";
                             const val = entries[dISO] && entries[dISO][h.id];
 
@@ -470,15 +578,17 @@ export default function HabitTracker() {
                               );
                             }
 
-                            if (h.type === "boolean") {
-                              const done = val === true;
+                            const done = isDone(dISO, h);
+
+                            if (currentRules.type === "boolean") {
+                              const cellBg = done ? DONE_COLOR : isPast ? MISSED_COLOR : bg;
                               return (
                                 <button
                                   key={dISO}
                                   onClick={() => toggleBoolean(dISO, h.id)}
                                   className="htk-cell-btn"
                                   style={{
-                                    background: done ? DONE_COLOR : bg,
+                                    background: cellBg,
                                     border: "none",
                                     cursor: "pointer",
                                     display: "flex",
@@ -493,19 +603,14 @@ export default function HabitTracker() {
                                   }}
                                 >
                                   {done && <Check size={15} color="#fff" strokeWidth={3} />}
+                                  {!done && isPast && <X size={13} color="#fff" strokeWidth={3} />}
                                 </button>
                               );
                             }
 
-                            let cellColor = bg;
-                            if (typeof val === "number" && val > 0) {
-                              if (h.ranges && h.ranges.length > 0) {
-                                const r = activeRange(h, val);
-                                cellColor = r ? r.color : bg;
-                              } else {
-                                cellColor = h.color;
-                              }
-                            }
+                            const hasValue = typeof val === "number";
+                            const showMissed = !done && (hasValue || isPast);
+                            const cellColor = done ? DONE_COLOR : showMissed ? MISSED_COLOR : bg;
                             return (
                               <div key={dISO} style={{ background: cellColor, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 44 }}>
                                 <input
@@ -522,7 +627,7 @@ export default function HabitTracker() {
                                     textAlign: "center",
                                     fontSize: 13,
                                     fontWeight: 600,
-                                    color: typeof val === "number" && val > 0 ? "#232320" : "#C9C5B9",
+                                    color: done || showMissed ? "#fff" : "#C9C5B9",
                                     outline: "none",
                                   }}
                                 />
@@ -543,25 +648,31 @@ export default function HabitTracker() {
 
       {showAddModal && draft && (
         <div
-          onClick={() => setShowAddModal(false)}
+          onClick={closeModal}
           style={{ position: "fixed", inset: 0, background: "rgba(20,20,15,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
             style={{ background: "#fff", borderRadius: 20, padding: 24, width: "100%", maxWidth: 460, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(20,20,15,0.25)" }}
           >
-            <h2 style={{ fontSize: 17, fontWeight: 700, color: "#232320", margin: "0 0 18px" }}>Nuevo hábito</h2>
+            <h2 style={{ fontSize: 17, fontWeight: 700, color: "#232320", margin: "0 0 18px" }}>{editingHabitId ? "Editar hábito" : "Nuevo hábito"}</h2>
 
             <label style={labelStyle}>Categoría</label>
-            <select
-              value={draft.categoryId}
-              onChange={(e) => setDraft((d) => ({ ...d, categoryId: e.target.value }))}
+            <input
+              list="htk-category-options"
+              value={draft.categoryName}
+              onChange={(e) => setDraft((d) => ({ ...d, categoryName: e.target.value }))}
+              placeholder="Ej: General"
               style={{ ...inputStyle, width: "100%", marginBottom: 14, boxSizing: "border-box" }}
-            >
+            />
+            <datalist id="htk-category-options">
               {categories.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.name} />
               ))}
-            </select>
+            </datalist>
+            <p style={{ fontSize: 11, color: "#B7B3A8", margin: "-10px 0 14px" }}>
+              Si escribís el nombre de una categoría que ya existe, se agrupa ahí. Si no existe, se crea nueva.
+            </p>
 
             <label style={labelStyle}>Nombre</label>
             <input
@@ -615,7 +726,7 @@ export default function HabitTracker() {
                   </button>
                 </div>
                 <p style={{ fontSize: 11, color: "#B7B3A8", margin: "0 0 10px", lineHeight: 1.4 }}>
-                  Definí a partir de qué cantidad cambia de color, y marcá cuáles cuentan como "cumplido". Si el valor no llega a ningún rango, se muestra sin marcar y no cuenta como cumplido.
+                  Definí desde y hasta qué cantidad aplica cada rango (dejá "hasta" vacío si no tiene techo) y marcá cuáles cuentan como "cumplido". Los que cumplen se ven en verde; el resto, en rojo si ya no hay tiempo de corregirlo.
                 </p>
 
                 {draft.ranges.length === 0 && (
@@ -624,31 +735,21 @@ export default function HabitTracker() {
 
                 {draft.ranges.map((r) => (
                   <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, background: "#FAFAF8", border: "1px solid #EEEDE7", borderRadius: 10, padding: 8, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 11, color: "#9A968C", whiteSpace: "nowrap" }}>A partir de</span>
+                    <span style={{ fontSize: 11, color: "#9A968C", whiteSpace: "nowrap" }}>Desde</span>
                     <input
                       type="number"
                       value={r.min}
                       onChange={(e) => updateRange(r.id, { min: e.target.value })}
-                      style={{ ...inputStyle, width: 68, padding: "6px 8px" }}
+                      style={{ ...inputStyle, width: 62, padding: "6px 8px" }}
                     />
-                    <div style={{ display: "flex", gap: 4 }}>
-                      {RANGE_COLORS.map((c) => (
-                        <button
-                          key={c}
-                          onClick={() => updateRange(r.id, { color: c })}
-                          title={c}
-                          style={{
-                            width: 18,
-                            height: 18,
-                            borderRadius: "50%",
-                            background: c,
-                            border: r.color === c ? "2px solid #232320" : "2px solid transparent",
-                            cursor: "pointer",
-                            padding: 0,
-                          }}
-                        />
-                      ))}
-                    </div>
+                    <span style={{ fontSize: 11, color: "#9A968C", whiteSpace: "nowrap" }}>hasta</span>
+                    <input
+                      type="number"
+                      value={r.max}
+                      onChange={(e) => updateRange(r.id, { max: e.target.value })}
+                      placeholder="sin límite"
+                      style={{ ...inputStyle, width: 78, padding: "6px 8px" }}
+                    />
                     <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#4A473F", whiteSpace: "nowrap" }}>
                       <input type="checkbox" checked={r.completes} onChange={(e) => updateRange(r.id, { completes: e.target.checked })} />
                       Cumple
@@ -666,13 +767,55 @@ export default function HabitTracker() {
             )}
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
-              <button onClick={() => setShowAddModal(false)} style={secondaryBtnStyle}>Cancelar</button>
+              <button onClick={closeModal} style={secondaryBtnStyle}>Cancelar</button>
               <button
-                onClick={saveNewHabit}
+                onClick={handleConfirmSave}
                 disabled={!draft.name.trim()}
                 style={{ ...primaryBtnStyle, opacity: draft.name.trim() ? 1 : 0.5, cursor: draft.name.trim() ? "pointer" : "not-allowed" }}
               >
-                Crear hábito
+                {editingHabitId ? "Guardar cambios" : "Crear hábito"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingEdit && (
+        <div
+          onClick={() => setPendingEdit(null)}
+          style={{ position: "fixed", inset: 0, background: "rgba(20,20,15,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100, padding: 20 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: "#fff", borderRadius: 20, padding: 24, width: "100%", maxWidth: 400, boxShadow: "0 20px 60px rgba(20,20,15,0.25)" }}
+          >
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: "#232320", margin: "0 0 10px" }}>Cambiaste cómo se cumple este hábito</h3>
+            <p style={{ fontSize: 13, color: "#6B675E", margin: "0 0 20px", lineHeight: 1.5 }}>
+              ¿Los nuevos valores rigen para todo el historial de este hábito, o solo desde hoy en adelante? Los días ya cargados se van a re-evaluar según lo que elijas.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <button
+                onClick={() => {
+                  applyHabitEdit(pendingEdit.habitId, pendingEdit.topFields, { mode: "all", snapshot: pendingEdit.rulesSnapshot });
+                  setPendingEdit(null);
+                  closeModal();
+                }}
+                style={primaryBtnStyle}
+              >
+                Aplicar a todo el historial
+              </button>
+              <button
+                onClick={() => {
+                  applyHabitEdit(pendingEdit.habitId, pendingEdit.topFields, { mode: "fromToday", snapshot: pendingEdit.rulesSnapshot });
+                  setPendingEdit(null);
+                  closeModal();
+                }}
+                style={secondaryBtnStyle}
+              >
+                Solo desde hoy en adelante
+              </button>
+              <button onClick={() => setPendingEdit(null)} style={{ ...secondaryBtnStyle, background: "none" }}>
+                Cancelar
               </button>
             </div>
           </div>

@@ -1,5 +1,7 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Check, X, Flame, Plus, Pencil } from "lucide-react";
+
+const API_BASE = `${window.location.protocol}//${window.location.hostname}:4000/api`;
 
 const DONE_COLOR = "#4CAE6E";
 const MISSED_COLOR = "#DD6A5C";
@@ -8,7 +10,6 @@ const STREAK_COL_W = 68;
 const DAY_COL_W = 72;
 const HEADER_H = 56;
 const CAT_DIVIDER_H = 30;
-const RULES_ALWAYS = "2000-01-01";
 
 function isoDate(d) {
   const y = d.getFullYear();
@@ -27,44 +28,6 @@ const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "
 let idCounter = 1000;
 const nextId = (prefix) => `${prefix}_${idCounter++}`;
 
-const initialCategories = [{ id: "cat_general", name: "General" }];
-
-const initialHabits = [
-  { id: "h_cama", categoryId: "cat_general", name: "Cama", trackStreak: true, rules: [{ from: RULES_ALWAYS, type: "boolean" }] },
-  { id: "h_diario", categoryId: "cat_general", name: "Diario", trackStreak: true, rules: [{ from: RULES_ALWAYS, type: "boolean" }] },
-  { id: "h_leer", categoryId: "cat_general", name: "Leer", trackStreak: false, rules: [{ from: RULES_ALWAYS, type: "number", unit: "páginas" }] },
-  { id: "h_dientes_md", categoryId: "cat_general", name: "Dientes mediodía", trackStreak: true, rules: [{ from: RULES_ALWAYS, type: "boolean" }] },
-  { id: "h_dientes_nc", categoryId: "cat_general", name: "Dientes noche", trackStreak: false, rules: [{ from: RULES_ALWAYS, type: "boolean" }] },
-  { id: "h_ducha", categoryId: "cat_general", name: "Ducha", trackStreak: false, rules: [{ from: RULES_ALWAYS, type: "boolean" }] },
-  { id: "h_cara", categoryId: "cat_general", name: "Cara", trackStreak: false, rules: [{ from: RULES_ALWAYS, type: "boolean" }] },
-  { id: "h_mg_am", categoryId: "cat_general", name: "Magnesio mañana", trackStreak: true, rules: [{ from: RULES_ALWAYS, type: "boolean" }] },
-  { id: "h_mg_pm", categoryId: "cat_general", name: "Magnesio noche", trackStreak: false, rules: [{ from: RULES_ALWAYS, type: "boolean" }] },
-  { id: "h_pasos", categoryId: "cat_general", name: "Pasos", trackStreak: false, rules: [{
-    from: RULES_ALWAYS, type: "number", unit: "pasos", ranges: [
-      { id: "r_pasos_0", min: 0, max: 5999, completes: false },
-      { id: "r_pasos_1", min: 6000, max: 9999, completes: true },
-      { id: "r_pasos_2", min: 10000, max: null, completes: true },
-    ],
-  }] },
-  { id: "h_pesarse", categoryId: "cat_general", name: "Pesarse", trackStreak: true, rules: [{ from: RULES_ALWAYS, type: "boolean" }] },
-  { id: "h_cafe", categoryId: "cat_general", name: "Café", trackStreak: true, rules: [{ from: RULES_ALWAYS, type: "number", unit: "tazas" }] },
-  { id: "h_agua", categoryId: "cat_general", name: "Agua", trackStreak: false, rules: [{ from: RULES_ALWAYS, type: "number", unit: "botellas" }] },
-  { id: "h_choco", categoryId: "cat_general", name: "Sin chocolatada", trackStreak: false, rules: [{ from: RULES_ALWAYS, type: "boolean" }] },
-];
-
-function buildSeedEntries(today) {
-  const e = {};
-  const set = (offset, values) => {
-    e[isoDate(addDays(today, -offset))] = values;
-  };
-  set(0, { h_cama: true, h_diario: true, h_dientes_md: true, h_mg_am: true, h_pesarse: true, h_cafe: 2, h_agua: 1 });
-  set(1, { h_cama: true, h_diario: true, h_leer: 5, h_dientes_md: true, h_mg_am: true, h_pasos: 6735, h_cafe: 2, h_agua: 2 });
-  set(2, { h_cama: true, h_diario: true, h_dientes_md: true, h_mg_am: true, h_pasos: 8891, h_pesarse: true, h_cafe: 2, h_agua: 3 });
-  set(3, { h_cama: true, h_diario: true, h_leer: 5, h_dientes_md: true, h_mg_am: true, h_pasos: 6909, h_cafe: 2, h_agua: 3, h_choco: true });
-  set(4, { h_cama: true, h_diario: true, h_dientes_md: true, h_mg_am: true, h_pasos: 6270, h_cafe: 2, h_agua: 3 });
-  return e;
-}
-
 export default function HabitTracker() {
   const today = useMemo(() => {
     const d = new Date();
@@ -73,18 +36,36 @@ export default function HabitTracker() {
   }, []);
   const todayISO = isoDate(today);
 
-  const [categories, setCategories] = useState(initialCategories);
-  const [habits, setHabits] = useState(() => {
-    const defaultStart = isoDate(addDays(today, -4));
-    return initialHabits.map((h) => ({ ...h, startDate: h.startDate || defaultStart }));
-  });
-  const [entries, setEntries] = useState(() => buildSeedEntries(today));
+  const [categories, setCategories] = useState([]);
+  const [habits, setHabits] = useState([]);
+  const [entries, setEntries] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [visibleDays, setVisibleDays] = useState(45);
   const [showAddModal, setShowAddModal] = useState(false);
   const [draft, setDraft] = useState(null);
   const [editingHabitId, setEditingHabitId] = useState(null);
   const [pendingEdit, setPendingEdit] = useState(null);
   const scrollRef = useRef(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/state`)
+      .then((res) => {
+        if (!res.ok) throw new Error("El servidor respondió con un error");
+        return res.json();
+      })
+      .then((data) => {
+        setCategories(data.categories);
+        setHabits(data.habits);
+        setEntries(data.entries);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        setLoadError(err);
+        setLoading(false);
+      });
+  }, []);
 
   function closeModal() {
     setShowAddModal(false);
@@ -127,12 +108,17 @@ export default function HabitTracker() {
     setShowAddModal(true);
   }
 
-  function resolveCategoryId(name) {
+  async function resolveCategoryId(name) {
     const trimmed = name.trim();
     if (!trimmed) return null;
     const existing = categories.find((c) => c.name.toLowerCase() === trimmed.toLowerCase());
     if (existing) return existing.id;
-    const newCat = { id: nextId("cat"), name: trimmed };
+    const res = await fetch(`${API_BASE}/categories`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: trimmed }),
+    });
+    const newCat = await res.json();
     setCategories((prev) => [...prev, newCat]);
     return newCat.id;
   }
@@ -152,28 +138,35 @@ export default function HabitTracker() {
     setDraft((d) => ({ ...d, ranges: d.ranges.filter((r) => r.id !== rangeId) }));
   }
 
-  function applyHabitEdit(habitId, topFields, rulesChange) {
+  async function applyRulesChange(habitId, mode, snapshot) {
     setHabits((prev) =>
       prev.map((h) => {
         if (h.id !== habitId) return h;
-        let rules = h.rules;
-        if (rulesChange) {
-          if (rulesChange.mode === "all") {
-            rules = [{ from: RULES_ALWAYS, ...rulesChange.snapshot }];
-          } else {
-            rules = [...h.rules.filter((r) => r.from !== todayISO), { from: todayISO, ...rulesChange.snapshot }].sort((a, b) =>
-              a.from.localeCompare(b.from)
-            );
-          }
+        let rules;
+        if (mode === "all") {
+          rules = [{ from: h.startDate, ...snapshot }];
+        } else {
+          rules = [...h.rules.filter((r) => r.from !== todayISO), { from: todayISO, ...snapshot }].sort((a, b) =>
+            a.from.localeCompare(b.from)
+          );
         }
-        return { ...h, ...topFields, rules };
+        return { ...h, rules };
       })
     );
+    try {
+      await fetch(`${API_BASE}/habits/${habitId}/rules`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode, from: todayISO, snapshot }),
+      });
+    } catch (err) {
+      console.error(err);
+    }
   }
 
-  function handleConfirmSave() {
+  async function handleConfirmSave() {
     if (!draft.name.trim() || !draft.categoryName.trim()) return;
-    const categoryId = resolveCategoryId(draft.categoryName);
+    const categoryId = await resolveCategoryId(draft.categoryName);
     const cleanRanges =
       draft.type === "number"
         ? draft.ranges
@@ -195,7 +188,12 @@ export default function HabitTracker() {
     };
 
     if (!editingHabitId) {
-      const newHabit = { id: nextId("h"), ...topFields, trackStreak: true, rules: [{ from: topFields.startDate, ...rulesSnapshot }] };
+      const res = await fetch(`${API_BASE}/habits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...topFields, rules: rulesSnapshot }),
+      });
+      const newHabit = await res.json();
       setHabits((prev) => [...prev, newHabit]);
       closeModal();
       return;
@@ -206,13 +204,23 @@ export default function HabitTracker() {
     const before = JSON.stringify({ type: current.type, unit: current.unit || "", ranges: current.ranges || [] });
     const after = JSON.stringify({ type: rulesSnapshot.type, unit: rulesSnapshot.unit || "", ranges: rulesSnapshot.ranges || [] });
 
+    try {
+      await fetch(`${API_BASE}/habits/${editingHabitId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(topFields),
+      });
+    } catch (err) {
+      console.error(err);
+    }
+    setHabits((prev) => prev.map((h) => (h.id === editingHabitId ? { ...h, ...topFields } : h)));
+
     if (before === after) {
-      applyHabitEdit(editingHabitId, topFields, null);
       closeModal();
       return;
     }
 
-    setPendingEdit({ habitId: editingHabitId, topFields, rulesSnapshot });
+    setPendingEdit({ habitId: editingHabitId, rulesSnapshot });
   }
 
   function handleScroll(e) {
@@ -266,24 +274,44 @@ export default function HabitTracker() {
   }
 
   function toggleBoolean(dateISO, habitId) {
+    const turningOn = !(entries[dateISO] && entries[dateISO][habitId] === true);
     setEntries((prev) => {
       const day = { ...(prev[dateISO] || {}) };
-      day[habitId] = day[habitId] === true ? undefined : true;
+      day[habitId] = turningOn ? true : undefined;
       return { ...prev, [dateISO]: day };
     });
+    if (turningOn) {
+      fetch(`${API_BASE}/entries/${dateISO}/${habitId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: 1 }),
+      }).catch(console.error);
+    } else {
+      fetch(`${API_BASE}/entries/${dateISO}/${habitId}`, { method: "DELETE" }).catch(console.error);
+    }
   }
 
   function updateNumber(dateISO, habitId, raw) {
+    let newValue;
+    if (raw !== "") {
+      const n = Math.max(0, Number(raw));
+      if (!Number.isNaN(n)) newValue = n;
+    }
     setEntries((prev) => {
       const day = { ...(prev[dateISO] || {}) };
-      if (raw === "") {
-        delete day[habitId];
-      } else {
-        const n = Math.max(0, Number(raw));
-        if (!Number.isNaN(n)) day[habitId] = n;
-      }
+      if (newValue === undefined) delete day[habitId];
+      else day[habitId] = newValue;
       return { ...prev, [dateISO]: day };
     });
+    if (newValue === undefined) {
+      fetch(`${API_BASE}/entries/${dateISO}/${habitId}`, { method: "DELETE" }).catch(console.error);
+    } else {
+      fetch(`${API_BASE}/entries/${dateISO}/${habitId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: newValue }),
+      }).catch(console.error);
+    }
   }
 
   function streakFor(habit) {
@@ -306,17 +334,40 @@ export default function HabitTracker() {
 
   function removeHabit(habitId) {
     setHabits((prev) => prev.filter((h) => h.id !== habitId));
+    fetch(`${API_BASE}/habits/${habitId}`, { method: "DELETE" }).catch(console.error);
   }
 
   function removeCategory(categoryId) {
     setCategories((prev) => prev.filter((c) => c.id !== categoryId));
     setHabits((prev) => prev.filter((h) => h.categoryId !== categoryId));
+    fetch(`${API_BASE}/categories/${categoryId}`, { method: "DELETE" }).catch(console.error);
   }
 
   const gridTemplate = `${HABIT_COL_W}px ${STREAK_COL_W}px repeat(${dates.length}, ${DAY_COL_W}px)`;
   const ratio = todayStats.total ? todayStats.done / todayStats.total : 0;
   const circumference = 2 * Math.PI * 26;
   const dashOffset = circumference * (1 - ratio);
+
+  if (loading) {
+    return (
+      <div style={{ fontFamily: "'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "#9A968C" }}>
+        Cargando tus hábitos...
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div style={{ fontFamily: "'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div style={{ maxWidth: 420, textAlign: "center", color: "#4A473F" }}>
+          <p style={{ fontWeight: 600, marginBottom: 8 }}>No se pudo conectar con el servidor</p>
+          <p style={{ fontSize: 13, color: "#9A968C", lineHeight: 1.5 }}>
+            Verificá que el servidor esté corriendo (<code>node server.js</code> dentro de la carpeta <code>server</code>) e intentá recargar la página. Estaba buscando: <code className="htk-mono">{API_BASE}/state</code>
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -459,6 +510,12 @@ export default function HabitTracker() {
                   </div>
                 );
               })}
+
+              {habits.length === 0 && (
+                <div style={{ gridColumn: "1 / -1", padding: "40px 20px", textAlign: "center", color: "#B7B3A8", fontSize: 13 }}>
+                  Todavía no tenés hábitos cargados. Usá el botón "Agregar hábito" de arriba para crear el primero.
+                </div>
+              )}
 
               {/* Categorías + filas de hábitos */}
               {categories.map((cat) => {
@@ -796,7 +853,7 @@ export default function HabitTracker() {
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <button
                 onClick={() => {
-                  applyHabitEdit(pendingEdit.habitId, pendingEdit.topFields, { mode: "all", snapshot: pendingEdit.rulesSnapshot });
+                  applyRulesChange(pendingEdit.habitId, "all", pendingEdit.rulesSnapshot);
                   setPendingEdit(null);
                   closeModal();
                 }}
@@ -806,7 +863,7 @@ export default function HabitTracker() {
               </button>
               <button
                 onClick={() => {
-                  applyHabitEdit(pendingEdit.habitId, pendingEdit.topFields, { mode: "fromToday", snapshot: pendingEdit.rulesSnapshot });
+                  applyRulesChange(pendingEdit.habitId, "fromToday", pendingEdit.rulesSnapshot);
                   setPendingEdit(null);
                   closeModal();
                 }}
